@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    ports:
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+
+  summit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        DATABASE_URL: postgresql://summit:summitdbpass@postgres:5432/summit
+        NEXT_PUBLIC_URL: http://168.144.222.76:3000
+        NEXTAUTH_URL: http://168.144.222.76:3000
+        NEXTAUTH_SECRET: build-time-placeholder
+        CLIENT_AUTH_SECRET: build-time-placeholder
+        RESEND_API_KEY: re_placeholder_build_only
+        SEND_FROM_EMAIL: build@example.com
+        RESEND_FROM_NAME: Summit
+        XENDIT_SECRET_KEY: xnd_placeholder_build_only
+        XENDIT_CALLBACK_VERIFICATION_TOKEN: build-time-placeholder
+        CRON_API_KEY: build-time-placeholder
+        MINIO_ENDPOINT: minio
+        MINIO_PORT: "9000"
+        MINIO_USE_SSL: "false"
+        MINIO_ACCESS_KEY: minioadmin
+        MINIO_SECRET_KEY: minioadmin123
+        MINIO_BUCKET_NAME: summit
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+
+volumes:
+  pgdata:
+  miniodata:
